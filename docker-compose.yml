@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  gemini-server:
+    build: .
+    container_name: gemini-local-server
+    ports:
+      - "8000:8000"
+    environment:
+      # 호스트 PC의 Chrome/Gemini 디버그 포트(9223)에 연결
+      - CDP_HOST=host.docker.internal
+      - CDP_PORT=9223
+      - GEMINI_ARCHIVE_DIR=/app/archive
+    extra_hosts:
+      # Linux Docker 호환성을 위한 호스트 게이트웨이 매핑
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # 대화 및 미디어(이미지/비디오) 저장 폴더 호스트 마운트
+      - ./archive:/app/archive
+    restart: unless-stopped

@@ -8,10 +8,12 @@ from typing import Optional, Dict, Any, List
 logger = logging.getLogger("gemini_bridge")
 logging.basicConfig(level=logging.INFO)
 
-CDP_PORT = 9223
+CDP_HOST = os.environ.get("CDP_HOST", "127.0.0.1")
+CDP_PORT = int(os.environ.get("CDP_PORT", "9223"))
 
 class GeminiBridge:
-    def __init__(self, port: int = CDP_PORT):
+    def __init__(self, host: str = CDP_HOST, port: int = CDP_PORT):
+        self.host = host
         self.port = port
         self.ws = None
         self.ws_url = None
@@ -22,13 +24,16 @@ class GeminiBridge:
 
     async def get_ws_url(self) -> Optional[str]:
         try:
-            req = urllib.request.urlopen(f"http://127.0.0.1:{self.port}/json", timeout=3)
+            req = urllib.request.urlopen(f"http://{self.host}:{self.port}/json", timeout=3)
             tabs = json.loads(req.read().decode("utf-8"))
             gemini_tab = next((t for t in tabs if "gemini.google.com" in t.get("url", "")), None)
             if gemini_tab:
-                return gemini_tab.get("webSocketDebuggerUrl")
+                url = gemini_tab.get("webSocketDebuggerUrl")
+                if url and self.host not in ("127.0.0.1", "localhost"):
+                    url = url.replace("127.0.0.1", self.host).replace("localhost", self.host)
+                return url
         except Exception as e:
-            logger.warning(f"Failed to fetch CDP targets from port {self.port}: {e}")
+            logger.warning(f"Failed to fetch CDP targets from {self.host}:{self.port}: {e}")
         return None
 
     def is_connected(self) -> bool:

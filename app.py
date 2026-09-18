@@ -199,7 +199,8 @@ async def switch_chat_endpoint(req: SwitchChatRequest):
 @app.post("/api/archive/open")
 async def open_archive_folder():
     try:
-        os.startfile(str(ARCHIVE_DIR))
+        if hasattr(os, "startfile"):
+            os.startfile(str(ARCHIVE_DIR))
         return {"success": True, "path": str(ARCHIVE_DIR)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

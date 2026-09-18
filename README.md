@@ -71,16 +71,31 @@ chrome.exe --remote-debugging-port=9223 https://gemini.google.com
 
 ### 3. 서버 실행
 
-#### Windows 원클릭 실행 (`start_server.bat`):
+#### 방법 1. Windows 원클릭 실행 (`start_server.bat`):
 Gemini가 켜져 있지 않으면 자동으로 띄우고 웹 대시보드 브라우저 창까지 한 번에 열어줍니다:
 ```bat
 start_server.bat
 ```
 
-#### 수동 실행:
+#### 방법 2. Python 직접 실행:
 ```bash
 python app.py
 ```
+
+#### 방법 3. Docker 및 Docker Compose로 켜두기:
+서버 프로세스를 도커 컨테이너로 백그라운드에 상시 구동할 수 있습니다:
+```bash
+# Docker Compose로 백그라운드 실행
+docker compose up -d
+
+# 또는 Dockerfile 직접 빌드 & 실행
+docker build -t gemini-local-server .
+docker run -d --name gemini-server -p 8000:8000 \
+  -e CDP_HOST=host.docker.internal \
+  -v ./archive:/app/archive \
+  gemini-local-server
+```
+> **도커 구동 원리**: 컨테이너 내부의 FastAPI 서버가 호스트 OS(`host.docker.internal:9223`)에 로그인되어 있는 Chrome/Gemini와 통신하므로, 구글 로그인 캡차나 2단계 인증 문제없이 완벽하게 동작합니다.
 
 * 🌐 **웹 대시보드**: [http://localhost:8000](http://localhost:8000)
 * ⚡ **Swagger API 문서**: [http://localhost:8000/docs](http://localhost:8000/docs)

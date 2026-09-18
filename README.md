@@ -144,7 +144,7 @@ curl -X POST http://localhost:10400/api/chat \
 
 기존 OpenAI 호환 라이브러리를 그대로 사용 가능합니다.
 
-#### Python `openai` 라이브러리 예시:
+#### Python `openai` 라이브러리 예시 (실시간 스트리밍 지원):
 ```python
 from openai import OpenAI
 
@@ -153,14 +153,22 @@ client = OpenAI(
     api_key="not-needed"
 )
 
+# 1. 일반 응답
 response = client.chat.completions.create(
     model="gemini",
-    messages=[
-        {"role": "user", "content": "파이썬으로 웹 크롤러 만드는 법 알려줘"}
-    ]
+    messages=[{"role": "user", "content": "파이썬으로 웹 크롤러 만드는 법 알려줘"}]
 )
-
 print(response.choices[0].message.content)
+
+# 2. 실시간 타자 타이핑 스트리밍 (stream=True)
+stream_res = client.chat.completions.create(
+    model="gemini",
+    messages=[{"role": "user", "content": "인공지능의 미래에 대해 3줄 요약해줘"}],
+    stream=True
+)
+for chunk in stream_res:
+    if chunk.choices and chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
 ```
 
 ---

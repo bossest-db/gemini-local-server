@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -43,6 +43,7 @@ class ChatRequest(BaseModel):
     prompt: str
     new_chat: bool = False
     chat_id: Optional[str] = None
+    stream: Optional[bool] = False
 
 class SwitchChatRequest(BaseModel):
     chat_id: Optional[str] = None
@@ -148,6 +149,52 @@ async def chat_endpoint(req: ChatRequest):
     if not req.prompt.strip():
         raise HTTPException(status_code=400, detail="Prompt cannot be empty")
 
+    if req.stream:
+        async def event_generator():
+            try:
+                async for event in bridge.send_prompt_stream(
+                    prompt=req.prompt,
+                    new_chat=req.new_chat,
+                    chat_id=req.chat_id
+                ):
+                    if event["type"] == "delta":
+                        yield f"data: {json.dumps({'type': 'delta', 'delta': event['text'], 'full_text': event['full_text']})}\n\n"
+                    elif event["type"] == "done":
+                        saved = archiver.save_turn(
+                            chat_id=event["chat_id"],
+                            title=event["title"],
+                            user_prompt=req.prompt,
+                            assistant_text=event["text"],
+                            images_base64=event.get("images", []),
+                            videos=event.get("videos", [])
+                        )
+                        done_payload = {
+                            "type": "done",
+                            "success": True,
+                            "chat_id": event["chat_id"],
+                            "title": event["title"],
+                            "text": event["text"],
+                            "images": saved["saved_images"],
+                            "videos": saved.get("saved_videos", []),
+                            "folder_name": saved["folder_name"],
+                            "folder_path": saved["folder_path"],
+                            "md_path": saved["md_path"]
+                        }
+                        yield f"data: {json.dumps(done_payload)}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'detail': str(e)})}\n\n"
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+
     try:
         # 1. Send to Gemini bridge
         res = await bridge.send_prompt(
@@ -216,6 +263,91 @@ async def openai_compatible_chat(req: OpenAIChatRequest):
     if not user_msg:
         raise HTTPException(status_code=400, detail="No user message provided")
 
+    now_ts = int(time.time())
+    chunk_id = f"chatcmpl-{now_ts}"
+
+    if req.stream:
+        async def openai_stream_generator():
+            try:
+                async for event in bridge.send_prompt_stream(prompt=user_msg, new_chat=False):
+                    if event["type"] == "delta":
+                        chunk = {
+                            "id": chunk_id,
+                            "object": "chat.completion.chunk",
+                            "created": now_ts,
+                            "model": req.model or "gemini",
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "delta": {"content": event["text"]},
+                                    "finish_reason": None
+                                }
+                            ]
+                        }
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                    elif event["type"] == "done":
+                        saved = archiver.save_turn(
+                            chat_id=event["chat_id"],
+                            title=event["title"],
+                            user_prompt=user_msg,
+                            assistant_text=event["text"],
+                            images_base64=event.get("images", []),
+                            videos=event.get("videos", [])
+                        )
+                        # If video or images were generated, yield a final delta with the links
+                        media_note = ""
+                        if saved.get("saved_videos"):
+                            vid_links = "\n".join([f"- 🎥 동영상 다운로드: http://localhost:{SERVER_PORT}/archive/{v['rel_path']}" for v in saved["saved_videos"]])
+                            media_note += f"\n\n[생성된 동영상]\n{vid_links}"
+                        elif saved.get("saved_images"):
+                            img_links = "\n".join([f"- 🖼️ 이미지 다운로드: http://localhost:{SERVER_PORT}/archive/{img['rel_path']}" for img in saved["saved_images"]])
+                            media_note += f"\n\n[생성된 이미지]\n{img_links}"
+
+                        if media_note:
+                            media_chunk = {
+                                "id": chunk_id,
+                                "object": "chat.completion.chunk",
+                                "created": now_ts,
+                                "model": req.model or "gemini",
+                                "choices": [
+                                    {
+                                        "index": 0,
+                                        "delta": {"content": media_note},
+                                        "finish_reason": None
+                                    }
+                                ]
+                            }
+                            yield f"data: {json.dumps(media_chunk)}\n\n"
+
+                        stop_chunk = {
+                            "id": chunk_id,
+                            "object": "chat.completion.chunk",
+                            "created": now_ts,
+                            "model": req.model or "gemini",
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "delta": {},
+                                    "finish_reason": "stop"
+                                }
+                            ]
+                        }
+                        yield f"data: {json.dumps(stop_chunk)}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                err_chunk = {"error": {"message": str(e), "type": "server_error"}}
+                yield f"data: {json.dumps(err_chunk)}\n\n"
+
+        return StreamingResponse(
+            openai_stream_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+
     try:
         res = await bridge.send_prompt(prompt=user_msg, new_chat=False)
         saved = archiver.save_turn(
@@ -235,9 +367,8 @@ async def openai_compatible_chat(req: OpenAIChatRequest):
             img_links = "\n".join([f"- 🖼️ 이미지 다운로드: http://localhost:{SERVER_PORT}/archive/{img['rel_path']}" for img in saved["saved_images"]])
             content_text += f"\n\n[생성된 이미지]\n{img_links}"
 
-        now_ts = int(time.time())
         return {
-            "id": f"chatcmpl-{now_ts}",
+            "id": chunk_id,
             "object": "chat.completion",
             "created": now_ts,
             "model": req.model or "gemini",

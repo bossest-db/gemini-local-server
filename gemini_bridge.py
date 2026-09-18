@@ -167,15 +167,18 @@ class GeminiBridge:
             logger.warning(f"Failed to fetch recent chats: {e}")
             return []
 
-    async def send_prompt(
+    async def send_prompt_stream(
         self,
         prompt: str,
         new_chat: bool = False,
         chat_id: Optional[str] = None,
         timeout: float = 120.0
-    ) -> Dict[str, Any]:
+    ):
         """
-        Sends prompt to Gemini, waits for full response (including images), and returns result.
+        Sends prompt to Gemini and streams deltas in real-time as an async generator.
+        Yields:
+          {"type": "delta", "text": "...", "full_text": "..."}
+          {"type": "done", "chat_id": "...", "title": "...", "text": "...", "images": [...], "videos": [...]}
         """
         async with self.lock:
             if not await self.connect():
@@ -273,14 +276,15 @@ class GeminiBridge:
             })()
             """)
 
-            # 4. Wait for response completion
-            logger.info("Waiting for Gemini response...")
+            # 4. Stream response tokens
+            logger.info("Streaming Gemini response...")
             start_time = asyncio.get_event_loop().time()
             last_text = ""
+            last_yielded_len = 0
             stable_count = 0
 
             while (asyncio.get_event_loop().time() - start_time) < timeout:
-                await asyncio.sleep(0.8)
+                await asyncio.sleep(0.08)
                 
                 check = await self.eval_js(f"""
                 (() => {{
@@ -303,10 +307,20 @@ class GeminiBridge:
                 is_gen = check.get("isGenerating", False)
                 has_new = check.get("hasNew", False)
 
+                if has_new and len(curr_text) > last_yielded_len:
+                    delta = curr_text[last_yielded_len:]
+                    last_yielded_len = len(curr_text)
+                    last_text = curr_text
+                    yield {
+                        "type": "delta",
+                        "text": delta,
+                        "full_text": curr_text
+                    }
+
                 if has_new and curr_text:
                     if curr_text == last_text and not is_gen:
                         stable_count += 1
-                        if stable_count >= 2:
+                        if stable_count >= 3:
                             # Response is stable and stop button is gone
                             break
                     else:
@@ -323,6 +337,12 @@ class GeminiBridge:
                     return (latest.innerText || latest.textContent || '').trim();
                 })()
                 """) or ""
+                if len(last_text) > last_yielded_len:
+                    yield {
+                        "type": "delta",
+                        "text": last_text[last_yielded_len:],
+                        "full_text": last_text
+                    }
 
             # 5. Extract Images and Videos (if generated)
             media_data = await self.eval_js("""
@@ -383,13 +403,38 @@ class GeminiBridge:
             })()
             """) or {}
 
-            return {
+            yield {
+                "type": "done",
                 "chat_id": meta_info.get("chat_id", "default"),
                 "title": meta_info.get("title", "Gemini 대화"),
                 "text": last_text,
                 "images": images_data,
-                "videos": videos_data,
-                "timestamp": asyncio.get_event_loop().time()
+                "videos": videos_data
             }
+
+    async def send_prompt(
+        self,
+        prompt: str,
+        new_chat: bool = False,
+        chat_id: Optional[str] = None,
+        timeout: float = 120.0
+    ) -> Dict[str, Any]:
+        """
+        Non-streaming helper that waits for the full response and returns dict.
+        """
+        result = {}
+        async for event in self.send_prompt_stream(
+            prompt=prompt, new_chat=new_chat, chat_id=chat_id, timeout=timeout
+        ):
+            if event["type"] == "done":
+                result = {
+                    "chat_id": event["chat_id"],
+                    "title": event["title"],
+                    "text": event["text"],
+                    "images": event.get("images", []),
+                    "videos": event.get("videos", []),
+                    "timestamp": asyncio.get_event_loop().time()
+                }
+        return result
 
 bridge = GeminiBridge()

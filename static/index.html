@@ -496,19 +496,60 @@
           body: JSON.stringify({
             prompt: prompt,
             new_chat: !currentChatId,
-            chat_id: currentChatId
+            chat_id: currentChatId,
+            stream: true
           })
         });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || '응답 생성 실패');
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || '응답 생성 실패');
+        }
 
-        currentChatId = data.chat_id;
-        document.getElementById('currentChatTitle').innerText = data.title;
-        document.getElementById('currentChatMeta').innerText = `ID: ${data.chat_id.substring(0, 8)}...`;
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        let streamedText = '';
+        let doneData = null;
 
-        // Update assistant message with response
-        updateAssistantMessage(assistantMsgId, data.text, data.images, data.folder_name, data.videos);
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop(); // preserve trailing incomplete chunk
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data:')) continue;
+            const dataStr = trimmed.slice(5).trim();
+            if (dataStr === '[DONE]') break;
+
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.type === 'delta') {
+                streamedText += parsed.delta;
+                updateStreamingAssistant(assistantMsgId, streamedText);
+              } else if (parsed.type === 'done') {
+                doneData = parsed;
+              } else if (parsed.type === 'error') {
+                throw new Error(parsed.detail || '스트리밍 중 오류 발생');
+              }
+            } catch (e) {
+              if (dataStr !== '[DONE]') console.error('SSE parse error:', e);
+            }
+          }
+        }
+
+        if (doneData) {
+          currentChatId = doneData.chat_id;
+          document.getElementById('currentChatTitle').innerText = doneData.title;
+          document.getElementById('currentChatMeta').innerText = `ID: ${doneData.chat_id.substring(0, 8)}...`;
+          updateAssistantMessage(assistantMsgId, doneData.text || streamedText, doneData.images, doneData.folder_name, doneData.videos);
+        } else if (streamedText) {
+          updateAssistantMessage(assistantMsgId, streamedText, []);
+        }
 
         // Refresh tab list
         if (currentTab === 'live') loadRecentChats();
@@ -561,6 +602,26 @@
         </div>
       `;
       container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function updateStreamingAssistant(id, markdownText) {
+      const el = document.getElementById(id);
+      if (!el) return;
+
+      el.innerHTML = `
+        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-xs text-white flex-shrink-0 shadow-md shadow-blue-500/20">
+          ✨
+        </div>
+        <div class="flex-1 bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-4 text-sm text-slate-200">
+          <div class="markdown-body">
+            ${marked.parse(markdownText)}<span class="inline-block w-1.5 h-4 ml-0.5 bg-blue-400 animate-pulse align-middle"></span>
+          </div>
+        </div>
+      `;
+
+      // scroll as tokens stream
+      const container = document.getElementById('messagesContainer');
       container.scrollTop = container.scrollHeight;
     }
 

@@ -30,10 +30,16 @@ def find_chat_dir(chat_id: str) -> Path | None:
                     pass
     return None
 
-def save_turn(chat_id: str, title: str, user_prompt: str, assistant_text: str, images_base64: list[dict] = None) -> dict:
+def save_turn(
+    chat_id: str,
+    title: str,
+    user_prompt: str,
+    assistant_text: str,
+    images_base64: list[dict] = None,
+    videos: list[dict] = None
+) -> dict:
     """
     Saves or appends a conversation turn to the archive.
-    images_base64: list of dicts with keys: {'data': str (base64 or dataUrl), 'format': 'png'}
     """
     now = datetime.now()
     date_str = now.strftime("%Y-%m-%d")

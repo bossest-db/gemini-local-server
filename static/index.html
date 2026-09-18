@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ko" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini 사설 서버 & 대시보드</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Marked.js for Markdown parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Highlight.js for code blocks -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            gemini: {
+              50: '#f0f4ff',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              accent: '#8b5cf6'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    
+    .markdown-body p { margin-bottom: 0.85rem; line-height: 1.65; }
+    .markdown-body pre { background: #0f172a; border: 1px solid #1e293b; border-radius: 0.75rem; padding: 1rem; margin: 0.85rem 0; overflow-x: auto; }
+    .markdown-body code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.9em; }
+    .markdown-body ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 0.85rem; }
+    .markdown-body ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 0.85rem; }
+    .markdown-body li { margin-bottom: 0.25rem; }
+    .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.5rem; }
+    .markdown-body h1 { font-size: 1.5rem; color: #93c5fd; }
+    .markdown-body h2 { font-size: 1.25rem; color: #bfdbfe; }
+    .markdown-body h3 { font-size: 1.1rem; color: #e2e8f0; }
+    .markdown-body blockquote { border-left: 3px solid #3b82f6; padding-left: 1rem; color: #94a3b8; margin: 0.85rem 0; }
+  </style>
+</head>
+<body class="h-full flex overflow-hidden font-sans antialiased selection:bg-blue-600 selection:text-white">
+
+  <!-- Left Sidebar -->
+  <aside id="sidebar" class="w-72 md:w-80 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col transition-all duration-300 z-30">
+    <!-- Sidebar Header -->
+    <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+          <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="font-bold text-sm tracking-tight bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">Gemini Local Server</h1>
+          <div id="statusBadge" class="flex items-center space-x-1.5 text-xs text-slate-400 mt-0.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span id="statusText">연결 확인 중...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- New Chat Button -->
+    <div class="p-3">
+      <button onclick="startNewChat()" class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium text-sm flex items-center justify-center space-x-2 shadow-md shadow-blue-600/20 active:scale-[0.98] transition">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        <span>새 대화 시작하기</span>
+      </button>
+    </div>
+
+    <!-- Chat Tabs -->
+    <div class="flex px-3 border-b border-slate-800 text-xs font-semibold text-slate-400">
+      <button id="tabLiveBtn" onclick="switchTab('live')" class="flex-1 py-2 text-center border-b-2 border-blue-500 text-blue-400">
+        ☁️ 최근 대화
+      </button>
+      <button id="tabArchiveBtn" onclick="switchTab('archive')" class="flex-1 py-2 text-center border-b-2 border-transparent hover:text-slate-200">
+        💾 로컬 보관함
+      </button>
+    </div>
+
+    <!-- Conversations List -->
+    <div class="flex-1 overflow-y-auto p-2 space-y-1" id="chatListContainer">
+      <div class="text-center py-8 text-xs text-slate-500">목록 불러오는 중...</div>
+    </div>
+
+    <!-- Sidebar Footer -->
+    <div class="p-3 border-t border-slate-800 bg-slate-900/60 space-y-2 text-xs">
+      <button onclick="openArchiveFolder()" class="w-full py-2 px-3 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 flex items-center justify-between transition">
+        <span class="flex items-center space-x-2">
+          <span>📁</span>
+          <span>로컬 저장 폴더 열기</span>
+        </span>
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+      </button>
+
+      <div class="flex items-center justify-between text-slate-400 px-1 pt-1">
+        <a href="/docs" target="_blank" class="hover:text-blue-400 flex items-center space-x-1">
+          <span>⚡ API Swagger (/docs)</span>
+        </a>
+        <span class="text-[10px] text-slate-600">v1.0.0</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-950 relative">
+    
+    <!-- Top Bar -->
+    <header class="h-14 border-b border-slate-800/80 px-4 md:px-6 flex items-center justify-between bg-slate-900/30 backdrop-blur-md z-10">
+      <div class="flex items-center space-x-3">
+        <button onclick="toggleSidebar()" class="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <div>
+          <h2 id="currentChatTitle" class="font-semibold text-sm text-slate-200 truncate max-w-xs md:max-w-md">새 대화</h2>
+          <p id="currentChatMeta" class="text-[11px] text-slate-400">준비됨</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <button onclick="startNewChat()" class="text-xs py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center space-x-1.5">
+          <span>+</span>
+          <span>새로 만들기</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Messages Container -->
+    <div id="messagesContainer" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+      
+      <!-- Welcome Hero (shown when empty) -->
+      <div id="welcomeHero" class="max-w-2xl mx-auto py-12 text-center space-y-4">
+        <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center shadow-xl shadow-blue-500/20">
+          <svg class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+          </svg>
+        </div>
+        <h3 class="text-xl md:text-2xl font-bold tracking-tight text-slate-100">
+          Google Gemini 로컬 통합 대시보드
+        </h3>
+        <p class="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+          윈도우에 로그인된 구글 Gemini 계정으로 질문하고 고화질 이미지를 생성하세요.<br>모든 대화와 이미지는 <strong>내 PC 로컬 디스크에 자동 아카이빙</strong>됩니다.
+        </p>
+
+        <!-- Prompt suggestion chips -->
+        <div class="pt-4 flex flex-wrap gap-2 justify-center max-w-lg mx-auto">
+          <button onclick="setPrompt('바다속에서 흰수염고래가 헤엄치는 영상 만들어줘')" class="text-xs py-2 px-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-purple-500 hover:text-purple-300 text-slate-300 transition">
+            🎥 흰수염고래 동영상 생성
+          </button>
+          <button onclick="setPrompt('맑은 가을하늘 풍경을 한 장 그려줘')" class="text-xs py-2 px-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-blue-500 hover:text-blue-300 text-slate-300 transition">
+            🎨 맑은 가을하늘 풍경 그려줘
+          </button>
+          <button onclick="setPrompt('양자 컴퓨터의 원리를 초등학생도 알기 쉽게 설명해줘')" class="text-xs py-2 px-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-blue-500 hover:text-blue-300 text-slate-300 transition">
+            🔬 양자 컴퓨터 원리 설명
+          </button>
+          <button onclick="setPrompt('파이썬 FastAPI로 REST API 서버 만드는 기본 예제 코드 작성해줘')" class="text-xs py-2 px-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-blue-500 hover:text-blue-300 text-slate-300 transition">
+            🐍 파이썬 FastAPI 예제 코드
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom Input Container -->
+    <div class="p-4 md:p-6 bg-slate-950/80 backdrop-blur-md border-t border-slate-800/80">
+      <div class="max-w-4xl mx-auto relative">
+        <form id="chatForm" onsubmit="handleSend(event)" class="relative flex items-end rounded-2xl bg-slate-900 border border-slate-800 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition shadow-lg">
+          <textarea
+            id="promptInput"
+            rows="1"
+            placeholder="Gemini에게 질문하거나 이미지를 요청하세요... (Shift+Enter 줄바꿈, Enter 전송)"
+            class="w-full py-3.5 pl-4 pr-14 bg-transparent resize-none outline-none text-slate-100 placeholder-slate-500 text-sm leading-relaxed max-h-48 overflow-y-auto"
+            onkeydown="handleKeyDown(event)"
+            oninput="autoResizeTextarea(this)"
+          ></textarea>
+          
+          <button
+            type="submit"
+            id="sendBtn"
+            class="absolute right-2.5 bottom-2.5 w-9 h-9 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white flex items-center justify-center transition shadow-md shadow-blue-600/30"
+          >
+            <svg id="sendIcon" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+            <svg id="loadingIcon" class="w-4 h-4 animate-spin hidden" viewBox="0 0 24 24" fill="none">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </button>
+        </form>
+        <div class="flex items-center justify-between mt-2 px-1 text-[11px] text-slate-500">
+          <span>Shift+Enter: 줄바꿈 / Enter: 전송</span>
+          <span id="storageNote">📁 로컬 디스크 `Documents/Gemini_Archive` 자동 동기화</span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Image Lightbox Modal -->
+  <div id="imageModal" onclick="closeImageModal()" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
+      <img id="modalImg" src="" class="max-w-full max-h-[80vh] rounded-xl object-contain shadow-2xl border border-slate-800">
+      <div class="mt-4 flex items-center space-x-3">
+        <a id="modalDownloadLink" download="gemini_image.png" class="py-2 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition flex items-center space-x-1.5 shadow-lg">
+          <span>💾 원본 다운로드</span>
+        </a>
+        <button onclick="closeImageModal()" class="py-2 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">
+          닫기 (ESC)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentChatId = null;
+    let currentTab = 'live'; // 'live' or 'archive'
+    let isGenerating = false;
+
+    // Marked options
+    marked.setOptions({
+      highlight: function(code, lang) {
+        if (lang && hljs.getLanguage(lang)) {
+          return hljs.highlight(code, { language: lang }).value;
+        }
+        return hljs.highlightAuto(code).value;
+      },
+      breaks: true
+    });
+
+    // Auto resize textarea
+    function autoResizeTextarea(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 180) + 'px';
+    }
+
+    function handleKeyDown(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend(e);
+      }
+    }
+
+    function setPrompt(text) {
+      const input = document.getElementById('promptInput');
+      input.value = text;
+      autoResizeTextarea(input);
+      input.focus();
+    }
+
+    // Toggle Mobile Sidebar
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.classList.toggle('-translate-x-full');
+    }
+
+    // Tab Switcher
+    function switchTab(tab) {
+      currentTab = tab;
+      const liveBtn = document.getElementById('tabLiveBtn');
+      const archBtn = document.getElementById('tabArchiveBtn');
+      if (tab === 'live') {
+        liveBtn.className = 'flex-1 py-2 text-center border-b-2 border-blue-500 text-blue-400 font-medium';
+        archBtn.className = 'flex-1 py-2 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+        loadRecentChats();
+      } else {
+        archBtn.className = 'flex-1 py-2 text-center border-b-2 border-blue-500 text-blue-400 font-medium';
+        liveBtn.className = 'flex-1 py-2 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+        loadArchivedChats();
+      }
+    }
+
+    // Status Checker
+    async function checkStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        const badge = document.getElementById('statusBadge');
+        const text = document.getElementById('statusText');
+        if (data.connected) {
+          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span class="text-emerald-400">Gemini 연결됨</span>';
+          if (data.chat_id && !currentChatId) {
+            currentChatId = data.chat_id;
+            document.getElementById('currentChatTitle').innerText = data.title || '활성 대화';
+            document.getElementById('currentChatMeta').innerText = `ID: ${data.chat_id.substring(0, 8)}...`;
+          }
+        } else {
+          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="text-rose-400">Gemini 미연결</span>';
+        }
+      } catch (e) {
+        console.error('Status check error:', e);
+      }
+    }
+
+    // Load Live Recent Chats
+    async function loadRecentChats() {
+      const container = document.getElementById('chatListContainer');
+      try {
+        const res = await fetch('/api/chats/recent');
+        const data = await res.json();
+        if (!data.chats || data.chats.length === 0) {
+          container.innerHTML = '<div class="text-center py-6 text-xs text-slate-500">대화 목록이 없습니다</div>';
+          return;
+        }
+        container.innerHTML = data.chats.map(chat => `
+          <button onclick="selectLiveChat('${chat.id}', '${escapeHtml(chat.title)}')" class="w-full text-left p-2.5 rounded-xl hover:bg-slate-800/80 transition flex items-center space-x-2.5 text-xs text-slate-300 group">
+            <span class="text-slate-500 group-hover:text-blue-400">💬</span>
+            <span class="truncate flex-1">${escapeHtml(chat.title)}</span>
+          </button>
+        `).join('');
+      } catch (e) {
+        container.innerHTML = '<div class="text-center py-6 text-xs text-rose-400">목록 불러오기 실패</div>';
+      }
+    }
+
+    // Load Local Archived Chats
+    async function loadArchivedChats() {
+      const container = document.getElementById('chatListContainer');
+      try {
+        const res = await fetch('/api/chats/archived');
+        const data = await res.json();
+        if (!data.chats || data.chats.length === 0) {
+          container.innerHTML = '<div class="text-center py-6 text-xs text-slate-500">로컬에 저장된 대화가 없습니다</div>';
+          return;
+        }
+        container.innerHTML = data.chats.map(item => `
+          <button onclick="loadArchivedDetail('${item.folder_name}')" class="w-full text-left p-2.5 rounded-xl hover:bg-slate-800/80 transition flex items-center justify-between text-xs text-slate-300 group">
+            <div class="flex items-center space-x-2 truncate">
+              <span class="text-slate-500 group-hover:text-emerald-400">📁</span>
+              <span class="truncate">${escapeHtml(item.title || item.folder_name)}</span>
+            </div>
+            <div class="flex items-center space-x-1 flex-shrink-0">
+              ${item.video_count ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/60 text-purple-300 font-medium">🎥 ${item.video_count}</span>` : ''}
+              ${item.image_count ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">🖼️ ${item.image_count}</span>` : ''}
+            </div>
+          </button>
+        `).join('');
+      } catch (e) {
+        container.innerHTML = '<div class="text-center py-6 text-xs text-rose-400">보관함 불러오기 실패</div>';
+      }
+    }
+
+    // Select live chat
+    async function selectLiveChat(id, title) {
+      currentChatId = id;
+      document.getElementById('currentChatTitle').innerText = title;
+      document.getElementById('currentChatMeta').innerText = `ID: ${id.substring(0, 8)}...`;
+      await fetch('/api/chats/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: id })
+      });
+      // Clear message view and show indicator
+      const container = document.getElementById('messagesContainer');
+      container.innerHTML = `
+        <div class="text-center py-12 text-slate-400 text-xs">
+          <p>☁️ '${escapeHtml(title)}' 대화방으로 전환되었습니다.</p>
+          <p class="text-slate-500 mt-1">질문을 입력하시면 이 대화방에서 계속 이어집니다.</p>
+        </div>
+      `;
+    }
+
+    // Load local archive detail
+    async function loadArchivedDetail(folderName) {
+      try {
+        const res = await fetch(`/api/chats/archived/${encodeURIComponent(folderName)}`);
+        const data = await res.json();
+        document.getElementById('currentChatTitle').innerText = data.meta.title || folderName;
+        document.getElementById('currentChatMeta').innerText = `💾 로컬 아카이브: ${folderName}`;
+
+        let mediaCards = '';
+        if (data.videos && data.videos.length > 0) {
+          mediaCards += `
+            <div class="space-y-4">
+              <h4 class="text-xs font-semibold text-purple-300 uppercase tracking-wider flex items-center space-x-1.5">
+                <span>🎥</span>
+                <span>생성된 고화질 동영상 (${data.videos.length})</span>
+              </h4>
+              <div class="grid grid-cols-1 gap-4">
+                ${data.videos.map(v => `
+                  <div class="rounded-2xl overflow-hidden border border-purple-500/30 bg-slate-950 p-3 shadow-xl">
+                    <video controls autoplay loop playsinline class="rounded-xl w-full max-h-[500px] bg-black shadow-inner" src="/archive/${encodeURIComponent(data.folder_name)}/${encodeURIComponent(v)}"></video>
+                    <div class="mt-3 flex items-center justify-between text-xs text-slate-300 px-1">
+                      <span class="flex items-center space-x-1.5 font-medium">
+                        <span class="text-purple-400">🎬</span>
+                        <span>${v}</span>
+                      </span>
+                      <a href="/archive/${encodeURIComponent(data.folder_name)}/${encodeURIComponent(v)}" download="${v}" class="py-1 px-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium transition flex items-center space-x-1 shadow">
+                        <span>⬇️ 다운로드</span>
+                      </a>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        const container = document.getElementById('messagesContainer');
+        container.innerHTML = `
+          <div class="max-w-4xl mx-auto space-y-6">
+            <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400 flex items-center justify-between">
+              <span>💾 로컬 폴더: <strong>${folderName}</strong></span>
+              <button onclick="openArchiveFolder()" class="text-blue-400 hover:underline">탐색기에서 열기</button>
+            </div>
+            ${mediaCards}
+            <div class="prose prose-invert max-w-none markdown-body bg-slate-900/40 p-6 rounded-2xl border border-slate-800/60">
+              ${marked.parse(data.markdown)}
+            </div>
+          </div>
+        `;
+      } catch (e) {
+        alert('아카이브 문서를 불러오지 못했습니다.');
+      }
+    }
+
+    // Start New Chat
+    async function startNewChat() {
+      currentChatId = null;
+      document.getElementById('currentChatTitle').innerText = '새 대화';
+      document.getElementById('currentChatMeta').innerText = '새로운 주제로 시작';
+      
+      const container = document.getElementById('messagesContainer');
+      container.innerHTML = document.getElementById('welcomeHero') ? '' : `
+        <div class="max-w-2xl mx-auto py-12 text-center space-y-3">
+          <h3 class="text-xl font-bold text-slate-200">새로운 대화를 시작합니다</h3>
+          <p class="text-xs text-slate-400">무엇이든 물어보거나 이미지를 요청하세요.</p>
+        </div>
+      `;
+      
+      await fetch('/api/chats/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_chat: true })
+      });
+      document.getElementById('promptInput').focus();
+    }
+
+    // Open Archive Folder
+    async function openArchiveFolder() {
+      try {
+        await fetch('/api/archive/open', { method: 'POST' });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Handle Send
+    async function handleSend(e) {
+      if (e) e.preventDefault();
+      const input = document.getElementById('promptInput');
+      const prompt = input.value.trim();
+      if (!prompt || isGenerating) return;
+
+      isGenerating = true;
+      input.value = '';
+      input.style.height = 'auto';
+
+      // Update UI buttons
+      document.getElementById('sendBtn').disabled = true;
+      document.getElementById('sendIcon').classList.add('hidden');
+      document.getElementById('loadingIcon').classList.remove('hidden');
+
+      // Hide welcome hero if present
+      const hero = document.getElementById('welcomeHero');
+      if (hero) hero.remove();
+
+      // Append User message
+      appendMessage('user', prompt);
+
+      // Append temporary loading assistant message
+      const assistantMsgId = 'msg-' + Date.now();
+      appendLoadingAssistant(assistantMsgId);
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: prompt,
+            new_chat: !currentChatId,
+            chat_id: currentChatId
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || '응답 생성 실패');
+
+        currentChatId = data.chat_id;
+        document.getElementById('currentChatTitle').innerText = data.title;
+        document.getElementById('currentChatMeta').innerText = `ID: ${data.chat_id.substring(0, 8)}...`;
+
+        // Update assistant message with response
+        updateAssistantMessage(assistantMsgId, data.text, data.images, data.folder_name, data.videos);
+
+        // Refresh tab list
+        if (currentTab === 'live') loadRecentChats();
+        else loadArchivedChats();
+
+      } catch (err) {
+        updateAssistantMessage(assistantMsgId, `⚠️ **오류가 발생했습니다**: ${err.message}`, []);
+      } finally {
+        isGenerating = false;
+        document.getElementById('sendBtn').disabled = false;
+        document.getElementById('sendIcon').classList.remove('hidden');
+        document.getElementById('loadingIcon').classList.add('hidden');
+        input.focus();
+      }
+    }
+
+    function appendMessage(role, text) {
+      const container = document.getElementById('messagesContainer');
+      const div = document.createElement('div');
+      div.className = 'max-w-4xl mx-auto flex items-start justify-end space-x-3';
+      div.innerHTML = `
+        <div class="max-w-2xl bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 text-sm shadow-md leading-relaxed whitespace-pre-wrap">
+          ${escapeHtml(text)}
+        </div>
+        <div class="w-8 h-8 rounded-full bg-blue-700 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+          👤
+        </div>
+      `;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function appendLoadingAssistant(id) {
+      const container = document.getElementById('messagesContainer');
+      const div = document.createElement('div');
+      div.id = id;
+      div.className = 'max-w-4xl mx-auto flex items-start space-x-3';
+      div.innerHTML = `
+        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-xs text-white flex-shrink-0 shadow-md shadow-blue-500/20">
+          ✨
+        </div>
+        <div class="flex-1 bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-4 text-sm text-slate-300">
+          <div class="flex items-center space-x-2 text-slate-400 text-xs">
+            <svg class="w-4 h-4 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>Gemini가 답변 및 미디어를 생성하고 있습니다...</span>
+          </div>
+        </div>
+      `;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function updateAssistantMessage(id, markdownText, images = [], folderName = '', videos = []) {
+      const el = document.getElementById(id);
+      if (!el) return;
+
+      let imagesHtml = '';
+      if (images && images.length > 0) {
+        imagesHtml = `
+          <div class="mt-4 grid grid-cols-1 gap-3 pt-3 border-t border-slate-800">
+            ${images.map(img => {
+              const src = img.rel_path ? `/archive/${img.rel_path}` : img.data;
+              return `
+                <div class="rounded-xl overflow-hidden border border-slate-800 bg-slate-950 p-2">
+                  <img src="${src}" onclick="openImageModal('${src}')" class="rounded-lg w-full max-h-96 object-cover cursor-zoom-in hover:opacity-95 transition" />
+                  <div class="mt-2 flex items-center justify-between text-[11px] text-slate-400 px-1">
+                    <span class="flex items-center space-x-1">
+                      <span>💾</span>
+                      <span>로컬 자동 저장 완료 (${img.filename})</span>
+                    </span>
+                    <a href="${src}" download="${img.filename}" class="text-blue-400 hover:underline">다운로드</a>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      }
+
+      let videosHtml = '';
+      if (videos && videos.length > 0) {
+        videosHtml = `
+          <div class="mt-4 space-y-3 pt-3 border-t border-slate-800">
+            ${videos.map(vid => {
+              const src = vid.rel_path ? `/archive/${vid.rel_path}` : vid.url;
+              return `
+                <div class="rounded-2xl overflow-hidden border border-purple-500/30 bg-slate-950 p-3 shadow-xl">
+                  <video controls autoplay loop playsinline class="rounded-xl w-full max-h-[480px] bg-black shadow-inner" src="${src}"></video>
+                  <div class="mt-3 flex items-center justify-between text-xs text-slate-300 px-1">
+                    <span class="flex items-center space-x-1.5 font-medium">
+                      <span class="text-purple-400">🎬</span>
+                      <span>로컬 자동 저장 완료 (${vid.filename || 'video.mp4'})</span>
+                    </span>
+                    <a href="${src}" download="${vid.filename || 'video.mp4'}" class="py-1 px-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium transition flex items-center space-x-1 shadow">
+                      <span>⬇️ 다운로드</span>
+                    </a>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      }
+
+      let saveNoteHtml = '';
+      if (folderName) {
+        saveNoteHtml = `
+          <div class="mt-3 pt-2 text-[10px] text-slate-500 border-t border-slate-800/60 flex items-center justify-between">
+            <span>📁 저장 폴더: ${folderName}</span>
+            <button onclick="openArchiveFolder()" class="text-blue-400/80 hover:underline">탐색기에서 열기</button>
+          </div>
+        `;
+      }
+
+      el.innerHTML = `
+        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-xs text-white flex-shrink-0 shadow-md shadow-blue-500/20">
+          ✨
+        </div>
+        <div class="flex-1 bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-4 text-sm text-slate-200">
+          <div class="markdown-body">
+            ${marked.parse(markdownText)}
+          </div>
+          ${imagesHtml}
+          ${videosHtml}
+          ${saveNoteHtml}
+        </div>
+      `;
+
+      // highlight code blocks
+      el.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+      });
+
+      const container = document.getElementById('messagesContainer');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function openImageModal(src) {
+      document.getElementById('modalImg').src = src;
+      document.getElementById('modalDownloadLink').href = src;
+      document.getElementById('imageModal').classList.remove('hidden');
+    }
+
+    function closeImageModal() {
+      document.getElementById('imageModal').classList.add('hidden');
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeImageModal();
+    });
+
+    function escapeHtml(str) {
+      return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Init
+    window.addEventListener('DOMContentLoaded', () => {
+      checkStatus();
+      loadRecentChats();
+      setInterval(checkStatus, 5000);
+    });
+  </script>
+</body>
+</html>

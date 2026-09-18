@@ -44,10 +44,14 @@ class ChatRequest(BaseModel):
     new_chat: bool = False
     chat_id: Optional[str] = None
     stream: Optional[bool] = False
+    model: Optional[str] = None
 
 class SwitchChatRequest(BaseModel):
     chat_id: Optional[str] = None
     new_chat: bool = False
+
+class SwitchModelRequest(BaseModel):
+    model: str
 
 # OpenAI compatible schemas
 class OpenAIMessage(BaseModel):
@@ -71,7 +75,17 @@ async def serve_dashboard():
 async def get_status():
     status = await bridge.get_status()
     status["archive_dir"] = str(ARCHIVE_DIR)
+    status["current_model"] = await bridge.get_current_model()
     return status
+
+@app.get("/api/model")
+async def get_model():
+    return {"current_model": await bridge.get_current_model()}
+
+@app.post("/api/model/switch")
+async def switch_model_endpoint(req: SwitchModelRequest):
+    res = await bridge.switch_model(req.model)
+    return res
 
 @app.get("/api/chats/recent")
 async def get_recent_chats():
@@ -148,6 +162,18 @@ async def get_chat_image(chat_id: str):
 async def chat_endpoint(req: ChatRequest):
     if not req.prompt.strip():
         raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+
+    if req.model:
+        m_lower = req.model.lower()
+        curr_m = (await bridge.get_current_model()).lower()
+        if "pro" in m_lower and "pro" not in curr_m:
+            await bridge.switch_model("pro")
+        elif "flash" in m_lower and "flash" not in curr_m and "lite" not in m_lower:
+            await bridge.switch_model("flash")
+        elif "lite" in m_lower and "lite" not in curr_m:
+            await bridge.switch_model("flash-lite")
+        elif ("think" in m_lower or "사고" in m_lower) and "사고" not in curr_m:
+            await bridge.switch_model("thinking")
 
     if req.stream:
         async def event_generator():
@@ -262,6 +288,19 @@ async def openai_compatible_chat(req: OpenAIChatRequest):
     user_msg = next((m.content for m in reversed(req.messages) if m.role == "user"), None)
     if not user_msg:
         raise HTTPException(status_code=400, detail="No user message provided")
+
+    # Auto-switch model if requested
+    if req.model and req.model.lower() not in ("gemini", "default"):
+        m_lower = req.model.lower()
+        curr_m = (await bridge.get_current_model()).lower()
+        if "pro" in m_lower and "pro" not in curr_m:
+            await bridge.switch_model("pro")
+        elif "flash" in m_lower and "flash" not in curr_m and "lite" not in m_lower:
+            await bridge.switch_model("flash")
+        elif "lite" in m_lower and "lite" not in curr_m:
+            await bridge.switch_model("flash-lite")
+        elif ("think" in m_lower or "사고" in m_lower) and "사고" not in curr_m:
+            await bridge.switch_model("thinking")
 
     now_ts = int(time.time())
     chunk_id = f"chatcmpl-{now_ts}"

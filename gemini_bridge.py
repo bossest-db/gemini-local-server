@@ -437,4 +437,72 @@ class GeminiBridge:
                 }
         return result
 
+    async def get_current_model(self) -> str:
+        """Get currently selected Gemini model name"""
+        if not await self.connect():
+            return "Disconnected"
+        try:
+            res = await self.eval_js("""
+            (() => {
+                const btn = document.querySelector('[data-test-id="bard-mode-menu-button"]');
+                return btn ? btn.innerText.trim() : "Unknown";
+            })()
+            """)
+            return res or "Unknown"
+        except Exception:
+            return "Unknown"
+
+    async def switch_model(self, target: str) -> Dict[str, Any]:
+        """Switch active Gemini model ('flash', 'pro', 'flash-lite', 'thinking')"""
+        if not await self.connect():
+            return {"success": False, "error": "Not connected to Gemini"}
+
+        target_lower = target.lower().strip()
+        try:
+            # Step 1: Open menu if not open
+            await self.eval_js("""
+            (() => {
+                const btn = document.querySelector('[data-test-id="bard-mode-menu-button"]');
+                if (btn) btn.click();
+            })()
+            """)
+            await asyncio.sleep(0.4)
+
+            # Step 2: Find matching menu item and click
+            res = await self.eval_js(f"""
+            (() => {{
+                const target = "{target_lower}";
+                const items = Array.from(document.querySelectorAll('gem-menu-item'));
+                
+                let match = items.find(el => {{
+                    const txt = (el.innerText || '').toLowerCase();
+                    if (target === 'flash' || (target.includes('flash') && !target.includes('lite'))) {{
+                        return txt.includes('flash') && !txt.includes('lite');
+                    }} else if (target === 'pro' || target.includes('pro')) {{
+                        return txt.includes('pro');
+                    }} else if (target.includes('lite')) {{
+                        return txt.includes('lite');
+                    }} else if (target.includes('think') || target.includes('사고')) {{
+                        return txt.includes('사고') || txt.includes('thinking');
+                    }}
+                    return txt.includes(target);
+                }});
+
+                if (match) {{
+                    match.click();
+                    return {{ success: true, selected: match.innerText.trim() }};
+                }}
+                return {{ success: false, items: items.map(i => i.innerText.trim()) }};
+            }})()
+            """)
+            await asyncio.sleep(0.4)
+            curr = await self.get_current_model()
+            return {
+                "success": bool(res and res.get("success")),
+                "current_model": curr,
+                "detail": res
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
 bridge = GeminiBridge()

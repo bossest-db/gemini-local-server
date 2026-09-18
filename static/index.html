@@ -134,7 +134,18 @@
         </div>
       </div>
 
-      <div class="flex items-center space-x-2">
+      <div class="flex items-center space-x-2.5">
+        <!-- Model Selector Dropdown -->
+        <div class="flex items-center space-x-1.5 bg-slate-800/90 border border-slate-700/80 rounded-lg px-2.5 py-1 shadow-sm">
+          <span class="text-[11px] text-slate-400">🤖 모델:</span>
+          <select id="modelSelector" onchange="onModelSelect(this.value)" class="bg-transparent text-xs font-semibold text-blue-400 focus:outline-none cursor-pointer">
+            <option value="flash" class="bg-slate-900 text-slate-200">3.8 Flash</option>
+            <option value="pro" class="bg-slate-900 text-slate-200">3.1 Pro</option>
+            <option value="flash-lite" class="bg-slate-900 text-slate-200">3.5 Flash-Lite</option>
+            <option value="thinking" class="bg-slate-900 text-slate-200">확장된 사고 모델</option>
+          </select>
+        </div>
+
         <button onclick="startNewChat()" class="text-xs py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center space-x-1.5">
           <span>+</span>
           <span>새로 만들기</span>
@@ -293,7 +304,6 @@
         const res = await fetch('/api/status');
         const data = await res.json();
         const badge = document.getElementById('statusBadge');
-        const text = document.getElementById('statusText');
         if (data.connected) {
           badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span class="text-emerald-400">Gemini 연결됨</span>';
           if (data.chat_id && !currentChatId) {
@@ -301,12 +311,45 @@
             document.getElementById('currentChatTitle').innerText = data.title || '활성 대화';
             document.getElementById('currentChatMeta').innerText = `ID: ${data.chat_id.substring(0, 8)}...`;
           }
+          if (data.current_model) {
+            updateModelSelectorUI(data.current_model);
+          }
         } else {
           badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="text-rose-400">Gemini 미연결</span>';
         }
       } catch (e) {
         console.error('Status check error:', e);
       }
+    }
+
+    async function onModelSelect(val) {
+      const sel = document.getElementById('modelSelector');
+      sel.disabled = true;
+      try {
+        const res = await fetch('/api/model/switch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: val })
+        });
+        const data = await res.json();
+        sel.disabled = false;
+        if (data.current_model) {
+          updateModelSelectorUI(data.current_model);
+        }
+      } catch (e) {
+        console.error('Model switch failed:', e);
+        sel.disabled = false;
+      }
+    }
+
+    function updateModelSelectorUI(modelName) {
+      const sel = document.getElementById('modelSelector');
+      if (!sel || sel.matches(':focus')) return;
+      const lower = (modelName || '').toLowerCase();
+      if (lower.includes('pro')) sel.value = 'pro';
+      else if (lower.includes('lite')) sel.value = 'flash-lite';
+      else if (lower.includes('think') || lower.includes('사고')) sel.value = 'thinking';
+      else if (lower.includes('flash')) sel.value = 'flash';
     }
 
     // Load Live Recent Chats
@@ -497,7 +540,8 @@
             prompt: prompt,
             new_chat: !currentChatId,
             chat_id: currentChatId,
-            stream: true
+            stream: true,
+            model: document.getElementById('modelSelector') ? document.getElementById('modelSelector').value : null
           })
         });
 

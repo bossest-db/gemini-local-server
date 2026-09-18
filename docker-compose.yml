@@ -5,8 +5,9 @@ services:
     build: .
     container_name: gemini-local-server
     ports:
-      - "8000:8000"
+      - "10400:10400"
     environment:
+      - PORT=10400
       # 호스트 PC의 Chrome/Gemini 디버그 포트(9223)에 연결
       - CDP_HOST=host.docker.internal
       - CDP_PORT=9223

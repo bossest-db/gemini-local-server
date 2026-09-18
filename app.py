@@ -33,6 +33,7 @@ BASE_DIR = Path(__file__).parent
 STATIC_DIR = BASE_DIR / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 ARCHIVE_DIR = archiver.ARCHIVE_DIR
+SERVER_PORT = int(os.environ.get("PORT", "10400"))
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -228,10 +229,10 @@ async def openai_compatible_chat(req: OpenAIChatRequest):
 
         content_text = res["text"]
         if saved.get("saved_videos"):
-            vid_links = "\n".join([f"- 🎥 동영상 다운로드: http://localhost:8000/archive/{v['rel_path']}" for v in saved["saved_videos"]])
+            vid_links = "\n".join([f"- 🎥 동영상 다운로드: http://localhost:{SERVER_PORT}/archive/{v['rel_path']}" for v in saved["saved_videos"]])
             content_text += f"\n\n[생성된 동영상]\n{vid_links}"
         elif saved.get("saved_images"):
-            img_links = "\n".join([f"- 🖼️ 이미지 다운로드: http://localhost:8000/archive/{img['rel_path']}" for img in saved["saved_images"]])
+            img_links = "\n".join([f"- 🖼️ 이미지 다운로드: http://localhost:{SERVER_PORT}/archive/{img['rel_path']}" for img in saved["saved_images"]])
             content_text += f"\n\n[생성된 이미지]\n{img_links}"
 
         now_ts = int(time.time())
@@ -261,6 +262,6 @@ async def openai_compatible_chat(req: OpenAIChatRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    print(f"Starting Gemini Local Server on http://0.0.0.0:8000...")
+    print(f"Starting Gemini Local Server on http://0.0.0.0:{SERVER_PORT}...")
     print(f"Archive directory: {ARCHIVE_DIR}")
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("app:app", host="0.0.0.0", port=SERVER_PORT, reload=False)

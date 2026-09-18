@@ -11,10 +11,11 @@ COPY . .
 
 # Environment settings
 ENV PYTHONUNBUFFERED=1
+ENV PORT=10400
 ENV CDP_HOST=host.docker.internal
 ENV CDP_PORT=9223
 ENV GEMINI_ARCHIVE_DIR=/app/archive
 
-EXPOSE 8000
+EXPOSE 10400
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "10400"]

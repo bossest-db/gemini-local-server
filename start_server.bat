@@ -18,10 +18,10 @@ if %errorlevel% neq 0 (
 )
 
 echo [1/2] Gemini 엔진 연결 준비 완료 (Port 9223)
-echo [2/2] FastAPI 웹 서버 및 대시보드 실행 (Port 8000)
+echo [2/2] FastAPI 웹 서버 및 대시보드 실행 (Port 10400)
 echo.
-echo 🌐 브라우저 대시보드 : http://localhost:8000
-echo ⚡ API Swagger 문서   : http://localhost:8000/docs
+echo 🌐 브라우저 대시보드 : http://localhost:10400
+echo ⚡ API Swagger 문서   : http://localhost:10400/docs
 echo 📁 로컬 저장 보관함   : C:\Users\yu\Documents\Gemini_Archive
 echo.
 echo 서버가 켜졌습니다. 종료하려면 이 창에서 Ctrl+C를 누르세요.
@@ -29,7 +29,7 @@ echo ========================================================
 echo.
 
 :: Automatically open browser after 2 seconds
-start "" http://localhost:8000
+start "" http://localhost:10400
 
 python app.py
 pause

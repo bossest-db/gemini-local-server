@@ -7,7 +7,7 @@
 
 ## ✨ 핵심 기능
 
-1. **모던 웹 대시보드 (`http://localhost:8000`)**
+1. **모던 웹 대시보드 (`http://localhost:10400`)**
    * 깔끔한 다크 모드 UI와 실시간 Gemini 연결 상태 감지.
    * Markdown 렌더링, 코드 블록 문법 강조(Syntax Highlighting), 이미지 라이트박스 뷰어 탑재.
    * **HTML5 인라인 비디오 플레이어**: Google Veo로 생성된 1280x720 HD 비디오를 대시보드 내에서 즉시 재생 및 다운로드 가능.
@@ -90,15 +90,15 @@ docker compose up -d
 
 # 또는 Dockerfile 직접 빌드 & 실행
 docker build -t gemini-local-server .
-docker run -d --name gemini-server -p 8000:8000 \
+docker run -d --name gemini-server -p 10400:10400 \
   -e CDP_HOST=host.docker.internal \
   -v ./archive:/app/archive \
   gemini-local-server
 ```
 > **도커 구동 원리**: 컨테이너 내부의 FastAPI 서버가 호스트 OS(`host.docker.internal:9223`)에 로그인되어 있는 Chrome/Gemini와 통신하므로, 구글 로그인 캡차나 2단계 인증 문제없이 완벽하게 동작합니다.
 
-* 🌐 **웹 대시보드**: [http://localhost:8000](http://localhost:8000)
-* ⚡ **Swagger API 문서**: [http://localhost:8000/docs](http://localhost:8000/docs)
+* 🌐 **웹 대시보드**: [http://localhost:10400](http://localhost:10400)
+* ⚡ **Swagger API 문서**: [http://localhost:10400/docs](http://localhost:10400/docs)
 
 ---
 
@@ -109,7 +109,7 @@ docker run -d --name gemini-server -p 8000:8000 \
 새 대화를 시작하거나 기존 대화방에 이어 질문합니다.
 
 ```bash
-curl -X POST http://localhost:8000/api/chat \
+curl -X POST http://localhost:10400/api/chat \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "바다속에서 흰수염고래가 헤엄치는 영상 만들어줘",
@@ -149,7 +149,7 @@ curl -X POST http://localhost:8000/api/chat \
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:8000/v1",
+    base_url="http://localhost:10400/v1",
     api_key="not-needed"
 )
 
@@ -169,11 +169,11 @@ print(response.choices[0].message.content)
 
 * **동영상 바이너리 다운로드**:
   ```bash
-  curl -O http://localhost:8000/api/chats/{chat_id}/video
+  curl -O http://localhost:10400/api/chats/{chat_id}/video
   ```
 * **이미지 바이너리 다운로드**:
   ```bash
-  curl -O http://localhost:8000/api/chats/{chat_id}/image
+  curl -O http://localhost:10400/api/chats/{chat_id}/image
   ```
 
 ---
@@ -200,7 +200,7 @@ C:\Users\<USER>\Documents\Gemini_Archive\
 ## 🔒 보안 및 개인정보
 
 * 본 프로그램은 외부 제3자 서버로 어떠한 개인정보나 대화 데이터를 전송하지 않습니다.
-* 모든 통신은 사용자 로컬 PC(`127.0.0.1:9223` CDP 프로토콜)와 로컬 FastAPI 서버(`localhost:8000`) 사이에서만 암호화되어 안전하게 처리됩니다.
+* 모든 통신은 사용자 로컬 PC(`127.0.0.1:9223` CDP 프로토콜)와 로컬 FastAPI 서버(`localhost:10400`) 사이에서만 암호화되어 안전하게 처리됩니다.
 
 ---
 
